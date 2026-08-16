@@ -1,0 +1,6 @@
+.git
+tmp/
+storage/logs/*.log
+main
+*.md
+tests/

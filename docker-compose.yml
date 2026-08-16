@@ -1,0 +1,76 @@
+# Kasirku Mobile — local orchestration (PRD §14 / §21 Phase 1)
+# Usage:
+#   cp .env.example .env      # adjust credentials (must match backend/.env)
+#   docker compose up --build
+#
+# Services:
+#   mysql   → database (PRD §12)
+#   backend → Goravel REST API (PRD §11), served on :3000
+#   nginx   → reverse proxy in front of the API on :${NGINX_PORT}
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: kasirku_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_secret_change_me}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-kasirku}
+      MYSQL_USER: ${MYSQL_USER:-kasirku}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-kasirku_secret_change_me}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-root_secret_change_me}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - kasirku
+
+  backend:
+    build:
+      context: ./backend
+    container_name: kasirku_backend
+    restart: unless-stopped
+    # DB_* mirror backend/.env; kept here so a single `.env` drives both.
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-true}
+      APP_HOST: 0.0.0.0
+      APP_PORT: 3000
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${MYSQL_DATABASE:-kasirku}
+      DB_USERNAME: ${MYSQL_USER:-kasirku}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-kasirku_secret_change_me}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - kasirku
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: kasirku_nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - kasirku
+
+volumes:
+  mysql_data:
+
+networks:
+  kasirku:
+    driver: bridge

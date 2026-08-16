@@ -1,0 +1,35 @@
+# ---- OS / editor ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# ---- Env / secrets ----
+.env
+.env.local
+*.local.env
+!/.env.example
+!backend/.env.example
+!mobile/.env.example
+
+# ---- Backend (Go / Goravel) ----
+backend/main
+backend/tmp/
+backend/storage/logs/*.log
+backend/vendor/
+
+# ---- Mobile (Expo / RN) ----
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/*.log
+
+# ---- Docker ----
+docker/data/
+mysql-data/
+
+# ---- Misc ----
+node_modules/
+*.log
+coverage/
