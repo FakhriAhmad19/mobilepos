@@ -11,6 +11,7 @@ so any Claude Code session (including a fresh cloud/mobile one) can continue wor
   Zustand, React Hook Form + Zod, Axios, expo-secure-store).
 - `docker-compose.yml` — mysql + backend + nginx.
 - `docs/DATABASE.md` — ERD + schema catalogue.
+- `docs/DEPLOYMENT.md` — Phase 9 production deploy (prod Docker, HTTPS, CI, backups).
 - `README.md` — full API reference and run instructions.
 
 ## Running it (fresh environment)
@@ -44,7 +45,7 @@ Demo logins (all password `password`): `admin@kasirku.test`,
 | 6 | POS/checkout (cart, barcode, atomic checkout, receipt, history, void) | ✅ done |
 | 7 | Dashboard & reports (KPIs, 7-day chart, sales/products/inventory/cashier) | ✅ done |
 | 8 | Hardening (validation, error handling, security, **tests**, perf) | 🚧 in progress |
-| 9 | Deployment (prod Docker, HTTPS, CI/CD, backups) | ⬜ pending |
+| 9 | Deployment (prod Docker, HTTPS, CI/CD, backups) | 🚧 in progress |
 
 Each completed phase was verified end-to-end with live curl/db checks. The
 backend currently boots with ~66 routes.
@@ -139,6 +140,31 @@ Local build/test note: `go mod tidy` was run to complete `go.sum` for host build
 feature tests compile (`go test -c ./tests/feature/`) and run once a MySQL is
 reachable.
 
-Still open for Phase 8: broader input sanitisation/validation coverage on
-master-data writes, a DB index review for report/lookup hot paths, and expanding
-feature-test coverage. Then Phase 9 (deployment).
+Phase 8 wrap-up: validation coverage reviewed (no gaps — master data uses the
+framework validator, inventory/POS validate manually), the DB index review
+landed the `app_orders(status, created_at)` migration, and feature coverage was
+expanded (hardening + inventory suites).
+
+## Phase 9 (deployment) — progress
+
+See `docs/DEPLOYMENT.md` for the full runbook. Landed so far:
+
+- **Production image** — `backend/Dockerfile.prod`: deterministic `go mod
+  download`, static build, non-root user, `HEALTHCHECK`, and **no baked
+  secrets** (runtime env overrides a placeholder `.env`).
+- **Production orchestration** — `docker-compose.prod.yml`: builds the prod
+  image, pins `APP_ENV=production`/`APP_DEBUG=false`, keeps MySQL internal (no
+  published port), and fails fast on missing secrets (`${VAR:?}`).
+- **HTTPS** — `docker/nginx/prod.conf`: TLS termination, 80 → 443 redirect,
+  HSTS, ACME webroot location. Certs live in `docker/nginx/certs/` (git-ignored);
+  `scripts/gen-self-signed-cert.sh` for staging, Let's Encrypt for prod.
+- **CI/CD** — `.github/workflows/ci.yml` (root — the framework's own workflows
+  under `backend/.github/` never ran): a `backend` job runs build/vet/unit +
+  **feature tests against a MySQL 8.4 service container** (generating
+  `APP_KEY`/`JWT_SECRET` per run), and a `docker` job builds `Dockerfile.prod`.
+- **Backups** — `scripts/backup-db.sh` (mysqldump → gzip, timestamped, prunes by
+  `KEEP_DAYS`) and `scripts/restore-db.sh`; `backups/` is git-ignored.
+- **Env template** — `.env.prod.example`.
+
+Still open for Phase 9: registry push on tagged releases, and confirming the
+feature suite is green in CI (first run happens on the PR).
