@@ -24,5 +24,7 @@ func Migrations() []schema.Migration {
 		&migrations.M20260815000012CreateStockAdjustmentsTable{},
 		&migrations.M20260815000013CreateStockOpnamesTables{},
 		&migrations.M20260815000014CreateNotificationsAndAuditLogsTables{},
+		// Phase 8 (hardening) — performance: report/lookup hot-path indexes.
+		&migrations.M20260816000001AddReportIndexes{},
 	}
 }

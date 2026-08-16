@@ -110,9 +110,19 @@ Landed so far:
   of a leaked stack trace.
 - **Testability refactor** — checkout money math extracted to pure functions in
   `app/services/pricing.go` (`LineSubtotal`, `GrandTotal`, `PaymentCovers`).
+- **DB index (perf)** — migration `20260816000001_add_report_indexes` adds a
+  composite `app_orders(status, created_at)` index. Every report and the
+  order-history date filter scan orders by `status='completed' AND created_at
+  BETWEEN …`; the table previously had `status` alone, so the date range still
+  meant scanning all completed orders.
+- **Validation coverage** — reviewed all write endpoints: master-data
+  controllers use `ctx.Request().Validate` (required/max_len rules); the
+  inventory/POS controllers (order, stock-in/out/adjustment/opname) validate
+  manually via `Bind` + explicit existence/quantity checks. No gaps found.
 - **Tests**
   - Unit (no DB, run anywhere): `app/services/pricing_test.go`,
-    `app/http/middleware/rate_limit_test.go` — `go test ./app/...`.
+    `app/http/middleware/rate_limit_test.go`,
+    `app/http/controllers/helpers_test.go` (pagination math) — `go test ./app/...`.
   - Feature (need MySQL): `tests/feature/hardening_test.go` covers auth
     (login success/invalid/validation), security headers, RBAC (cashier can't
     write master data, warehouse can't checkout, unauth → 401), and **checkout
