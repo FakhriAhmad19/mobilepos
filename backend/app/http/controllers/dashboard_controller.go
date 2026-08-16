@@ -65,7 +65,9 @@ func (r *DashboardController) Show(ctx http.Context) http.Response {
 	}
 	chart := fillSalesSeries(points)
 
-	var top []topProduct
+	// Initialise to a non-nil slice so an empty result serialises as [] (not
+	// null), which clients iterate over safely.
+	top := []topProduct{}
 	if err := facades.Orm().Query().Raw(`
 		SELECT oi.product_id, oi.product_name, SUM(oi.quantity) AS qty, SUM(oi.subtotal) AS revenue
 		FROM app_order_items oi
