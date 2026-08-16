@@ -34,7 +34,11 @@ func TestHardeningTestSuite(t *testing.T) {
 // SetupTest resets the schema and reseeds the demo data before each test so
 // every case starts from the known fixture state.
 func (s *HardeningTestSuite) SetupTest() {
-	s.RefreshDatabase(&seeders.DatabaseSeeder{})
+	// Refresh the schema, then seed explicitly. RefreshDatabase runs
+	// `migrate:refresh`, which only seeds when the boolean `--seed` flag is set —
+	// passing seeders to it alone does NOT seed. Seed() runs `db:seed` directly.
+	s.RefreshDatabase()
+	s.Seed(&seeders.DatabaseSeeder{})
 }
 
 const jsonContentType = "application/json"
