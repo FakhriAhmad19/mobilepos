@@ -29,6 +29,10 @@ mobile/*.log
 docker/data/
 mysql-data/
 
+# ---- Deployment (never commit certs or DB dumps) ----
+docker/nginx/certs/*.pem
+backups/
+
 # ---- Misc ----
 node_modules/
 *.log

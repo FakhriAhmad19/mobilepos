@@ -11,6 +11,7 @@ so any Claude Code session (including a fresh cloud/mobile one) can continue wor
   Zustand, React Hook Form + Zod, Axios, expo-secure-store).
 - `docker-compose.yml` — mysql + backend + nginx.
 - `docs/DATABASE.md` — ERD + schema catalogue.
+- `docs/DEPLOYMENT.md` — Phase 9 production deploy (prod Docker, HTTPS, CI, backups).
 - `README.md` — full API reference and run instructions.
 
 ## Running it (fresh environment)
@@ -43,8 +44,8 @@ Demo logins (all password `password`): `admin@kasirku.test`,
 | 5 | Inventory (stock, stock-in/out, adjustment, opname, movement ledger) | ✅ done |
 | 6 | POS/checkout (cart, barcode, atomic checkout, receipt, history, void) | ✅ done |
 | 7 | Dashboard & reports (KPIs, 7-day chart, sales/products/inventory/cashier) | ✅ done |
-| 8 | Hardening (validation, error handling, security, **tests**, perf) | ⬜ next |
-| 9 | Deployment (prod Docker, HTTPS, CI/CD, backups) | ⬜ pending |
+| 8 | Hardening (validation, error handling, security, **tests**, perf) | 🚧 in progress |
+| 9 | Deployment (prod Docker, HTTPS, CI/CD, backups) | 🚧 in progress |
 
 Each completed phase was verified end-to-end with live curl/db checks. The
 backend currently boots with ~66 routes.
@@ -95,8 +96,75 @@ Success: `{ success, message, data, meta }`. Error:
 `{ success, message, errors? }`. Helpers in `app/http/controllers/helpers.go`
 and `auth_controller.go`.
 
-## Next up — Phase 8 (hardening)
+## Phase 8 (hardening) — progress
 
-Suggested focus: backend tests (Goravel test suite for auth, checkout atomicity,
-RBAC), consistent error handling, rate limiting on `/auth/login`, secure headers,
-input sanitisation, and a few DB indexes review. Then Phase 9 (deployment).
+Landed so far:
+
+- **Security headers** — `middleware.SecureHeaders()` (registered as global
+  middleware in `routes/api.go`) sets `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`, `X-XSS-Protection`, and a locked-down CSP on every response.
+- **Login rate limiting** — `middleware.Throttle(name, max, window)` (in-memory
+  fixed-window, per client IP) guards `POST /auth/login` at 10 req/min → `429`
+  with a `Retry-After` header.
+- **Consistent errors** — `facades.Route().Recover(...)` turns any unhandled
+  panic into the PRD `{success:false,message}` envelope + a logged error, instead
+  of a leaked stack trace.
+- **Testability refactor** — checkout money math extracted to pure functions in
+  `app/services/pricing.go` (`LineSubtotal`, `GrandTotal`, `PaymentCovers`).
+- **DB index (perf)** — migration `20260816000001_add_report_indexes` adds a
+  composite `app_orders(status, created_at)` index. Every report and the
+  order-history date filter scan orders by `status='completed' AND created_at
+  BETWEEN …`; the table previously had `status` alone, so the date range still
+  meant scanning all completed orders.
+- **Validation coverage** — reviewed all write endpoints: master-data
+  controllers use `ctx.Request().Validate` (required/max_len rules); the
+  inventory/POS controllers (order, stock-in/out/adjustment/opname) validate
+  manually via `Bind` + explicit existence/quantity checks. No gaps found.
+- **Tests**
+  - Unit (no DB, run anywhere): `app/services/pricing_test.go`,
+    `app/http/middleware/rate_limit_test.go`,
+    `app/http/controllers/helpers_test.go` (pagination math) — `go test ./app/...`.
+  - Feature (need MySQL): `tests/feature/hardening_test.go` covers auth
+    (login success/invalid/validation), security headers, RBAC (cashier can't
+    write master data, warehouse can't checkout, unauth → 401), and **checkout
+    atomicity** (rollback leaves stock untouched and no order row).
+    `tests/feature/inventory_test.go` adds the stock-engine flows: void returns
+    stock via a RETURN movement (admin-only), stock-in increments stock and
+    writes a STOCK_IN ledger row, barcode scan lookup (hit/404), and
+    insufficient-payment rejection. Both share one suite/token cache. Run with
+    the dev stack up: `docker compose up -d mysql && (cd backend && go test ./tests/...)`.
+
+Local build/test note: `go mod tidy` was run to complete `go.sum` for host builds
+(it also swapped stale postgres indirect deps for the mysql ones actually used).
+`go build ./...`, `go vet ./...`, and the unit tests all pass on the host; the
+feature tests compile (`go test -c ./tests/feature/`) and run once a MySQL is
+reachable.
+
+Phase 8 wrap-up: validation coverage reviewed (no gaps — master data uses the
+framework validator, inventory/POS validate manually), the DB index review
+landed the `app_orders(status, created_at)` migration, and feature coverage was
+expanded (hardening + inventory suites).
+
+## Phase 9 (deployment) — progress
+
+See `docs/DEPLOYMENT.md` for the full runbook. Landed so far:
+
+- **Production image** — `backend/Dockerfile.prod`: deterministic `go mod
+  download`, static build, non-root user, `HEALTHCHECK`, and **no baked
+  secrets** (runtime env overrides a placeholder `.env`).
+- **Production orchestration** — `docker-compose.prod.yml`: builds the prod
+  image, pins `APP_ENV=production`/`APP_DEBUG=false`, keeps MySQL internal (no
+  published port), and fails fast on missing secrets (`${VAR:?}`).
+- **HTTPS** — `docker/nginx/prod.conf`: TLS termination, 80 → 443 redirect,
+  HSTS, ACME webroot location. Certs live in `docker/nginx/certs/` (git-ignored);
+  `scripts/gen-self-signed-cert.sh` for staging, Let's Encrypt for prod.
+- **CI/CD** — `.github/workflows/ci.yml` (root — the framework's own workflows
+  under `backend/.github/` never ran): a `backend` job runs build/vet/unit +
+  **feature tests against a MySQL 8.4 service container** (generating
+  `APP_KEY`/`JWT_SECRET` per run), and a `docker` job builds `Dockerfile.prod`.
+- **Backups** — `scripts/backup-db.sh` (mysqldump → gzip, timestamped, prunes by
+  `KEEP_DAYS`) and `scripts/restore-db.sh`; `backups/` is git-ignored.
+- **Env template** — `.env.prod.example`.
+
+Still open for Phase 9: registry push on tagged releases, and confirming the
+feature suite is green in CI (first run happens on the PR).

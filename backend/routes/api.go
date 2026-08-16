@@ -1,6 +1,9 @@
 package routes
 
 import (
+	nethttp "net/http"
+	"time"
+
 	"github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/contracts/route"
 
@@ -33,6 +36,22 @@ func Api() {
 	healthController := controllers.NewHealthController()
 	authController := controllers.NewAuthController()
 
+	// Baseline security headers on every response (Phase 8 — security).
+	facades.Route().GlobalMiddleware(middleware.SecureHeaders())
+
+	// Turn any unhandled panic into the PRD error envelope instead of leaking a
+	// stack trace or dropping the connection (Phase 8 — consistent errors).
+	facades.Route().Recover(func(ctx http.Context, err any) {
+		facades.Log().Error(err)
+		_ = ctx.Response().Json(nethttp.StatusInternalServerError, http.Json{
+			"success": false,
+			"message": "Internal server error",
+		}).Abort()
+	})
+
+	// Brute-force protection on login: 10 attempts / minute / client IP.
+	loginThrottle := middleware.Throttle("login", 10, time.Minute)
+
 	facades.Route().Prefix("api/v1").Group(func(router route.Router) {
 		// --- Public ---------------------------------------------------
 		router.Get("health", healthController.Show)
@@ -41,7 +60,7 @@ func Api() {
 				"success": true, "message": "pong", "data": http.Json{}, "meta": http.Json{},
 			})
 		})
-		router.Post("auth/login", authController.Login)
+		router.Middleware(loginThrottle).Post("auth/login", authController.Login)
 
 		// --- Authenticated (any role) --------------------------------
 		router.Middleware(middleware.Authenticate()).Group(func(auth route.Router) {
