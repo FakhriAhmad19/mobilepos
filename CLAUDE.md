@@ -44,8 +44,8 @@ Demo logins (all password `password`): `admin@kasirku.test`,
 | 5 | Inventory (stock, stock-in/out, adjustment, opname, movement ledger) | ✅ done |
 | 6 | POS/checkout (cart, barcode, atomic checkout, receipt, history, void) | ✅ done |
 | 7 | Dashboard & reports (KPIs, 7-day chart, sales/products/inventory/cashier) | ✅ done |
-| 8 | Hardening (validation, error handling, security, **tests**, perf) | 🚧 in progress |
-| 9 | Deployment (prod Docker, HTTPS, CI/CD, backups) | 🚧 in progress |
+| 8 | Hardening (validation, error handling, security, **tests**, perf) | ✅ done |
+| 9 | Deployment (prod Docker, HTTPS, CI/CD, backups) | ✅ done |
 
 Each completed phase was verified end-to-end with live curl/db checks. The
 backend currently boots with ~66 routes.
@@ -166,5 +166,7 @@ See `docs/DEPLOYMENT.md` for the full runbook. Landed so far:
   `KEEP_DAYS`) and `scripts/restore-db.sh`; `backups/` is git-ignored.
 - **Env template** — `.env.prod.example`.
 
-Still open for Phase 9: registry push on tagged releases, and confirming the
-feature suite is green in CI (first run happens on the PR).
+CI is green: the `backend` job (build/vet/unit + feature tests on a MySQL 8.4
+service) and the `docker` job both pass on `main`. The full stack was also run
+live once (backend + MariaDB + Expo web) to verify end-to-end. Optional future
+enhancement: registry push on tagged releases.
