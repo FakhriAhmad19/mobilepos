@@ -43,7 +43,7 @@ Demo logins (all password `password`): `admin@kasirku.test`,
 | 5 | Inventory (stock, stock-in/out, adjustment, opname, movement ledger) | ✅ done |
 | 6 | POS/checkout (cart, barcode, atomic checkout, receipt, history, void) | ✅ done |
 | 7 | Dashboard & reports (KPIs, 7-day chart, sales/products/inventory/cashier) | ✅ done |
-| 8 | Hardening (validation, error handling, security, **tests**, perf) | ⬜ next |
+| 8 | Hardening (validation, error handling, security, **tests**, perf) | 🚧 in progress |
 | 9 | Deployment (prod Docker, HTTPS, CI/CD, backups) | ⬜ pending |
 
 Each completed phase was verified end-to-end with live curl/db checks. The
@@ -95,8 +95,36 @@ Success: `{ success, message, data, meta }`. Error:
 `{ success, message, errors? }`. Helpers in `app/http/controllers/helpers.go`
 and `auth_controller.go`.
 
-## Next up — Phase 8 (hardening)
+## Phase 8 (hardening) — progress
 
-Suggested focus: backend tests (Goravel test suite for auth, checkout atomicity,
-RBAC), consistent error handling, rate limiting on `/auth/login`, secure headers,
-input sanitisation, and a few DB indexes review. Then Phase 9 (deployment).
+Landed so far:
+
+- **Security headers** — `middleware.SecureHeaders()` (registered as global
+  middleware in `routes/api.go`) sets `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`, `X-XSS-Protection`, and a locked-down CSP on every response.
+- **Login rate limiting** — `middleware.Throttle(name, max, window)` (in-memory
+  fixed-window, per client IP) guards `POST /auth/login` at 10 req/min → `429`
+  with a `Retry-After` header.
+- **Consistent errors** — `facades.Route().Recover(...)` turns any unhandled
+  panic into the PRD `{success:false,message}` envelope + a logged error, instead
+  of a leaked stack trace.
+- **Testability refactor** — checkout money math extracted to pure functions in
+  `app/services/pricing.go` (`LineSubtotal`, `GrandTotal`, `PaymentCovers`).
+- **Tests**
+  - Unit (no DB, run anywhere): `app/services/pricing_test.go`,
+    `app/http/middleware/rate_limit_test.go` — `go test ./app/...`.
+  - Feature (need MySQL): `tests/feature/hardening_test.go` covers auth
+    (login success/invalid/validation), security headers, RBAC (cashier can't
+    write master data, warehouse can't checkout, unauth → 401), and **checkout
+    atomicity** (rollback leaves stock untouched and no order row). Run with the
+    dev stack up: `docker compose up -d mysql && (cd backend && go test ./tests/...)`.
+
+Local build/test note: `go mod tidy` was run to complete `go.sum` for host builds
+(it also swapped stale postgres indirect deps for the mysql ones actually used).
+`go build ./...`, `go vet ./...`, and the unit tests all pass on the host; the
+feature tests compile (`go test -c ./tests/feature/`) and run once a MySQL is
+reachable.
+
+Still open for Phase 8: broader input sanitisation/validation coverage on
+master-data writes, a DB index review for report/lookup hot paths, and expanding
+feature-test coverage. Then Phase 9 (deployment).

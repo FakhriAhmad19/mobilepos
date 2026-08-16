@@ -71,10 +71,7 @@ func (r *OrderController) Store(ctx http.Context) http.Response {
 		if err := facades.Orm().Query().Where("id", it.ProductID).First(&product); err != nil || product.ID == 0 {
 			return unprocessable(ctx, "One or more products do not exist")
 		}
-		lineSubtotal := float64(it.Quantity)*product.SellingPrice - it.Discount
-		if lineSubtotal < 0 {
-			lineSubtotal = 0
-		}
+		lineSubtotal := services.LineSubtotal(it.Quantity, product.SellingPrice, it.Discount)
 		subtotal += lineSubtotal
 		items = append(items, models.OrderItem{
 			ProductID:   product.ID,
@@ -87,10 +84,7 @@ func (r *OrderController) Store(ctx http.Context) http.Response {
 		})
 	}
 
-	grandTotal := subtotal - req.Discount + req.Tax
-	if grandTotal < 0 {
-		grandTotal = 0
-	}
+	grandTotal := services.GrandTotal(subtotal, req.Discount, req.Tax)
 
 	// Validate and total the payments.
 	var totalPaid float64
@@ -103,7 +97,7 @@ func (r *OrderController) Store(ctx http.Context) http.Response {
 		}
 		totalPaid += p.AmountPaid
 	}
-	if totalPaid+0.001 < grandTotal {
+	if !services.PaymentCovers(totalPaid, grandTotal) {
 		return unprocessable(ctx, "Insufficient payment amount")
 	}
 	change := totalPaid - grandTotal
