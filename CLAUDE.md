@@ -126,8 +126,12 @@ Landed so far:
   - Feature (need MySQL): `tests/feature/hardening_test.go` covers auth
     (login success/invalid/validation), security headers, RBAC (cashier can't
     write master data, warehouse can't checkout, unauth → 401), and **checkout
-    atomicity** (rollback leaves stock untouched and no order row). Run with the
-    dev stack up: `docker compose up -d mysql && (cd backend && go test ./tests/...)`.
+    atomicity** (rollback leaves stock untouched and no order row).
+    `tests/feature/inventory_test.go` adds the stock-engine flows: void returns
+    stock via a RETURN movement (admin-only), stock-in increments stock and
+    writes a STOCK_IN ledger row, barcode scan lookup (hit/404), and
+    insufficient-payment rejection. Both share one suite/token cache. Run with
+    the dev stack up: `docker compose up -d mysql && (cd backend && go test ./tests/...)`.
 
 Local build/test note: `go mod tidy` was run to complete `go.sum` for host builds
 (it also swapped stale postgres indirect deps for the mysql ones actually used).
