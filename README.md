@@ -27,6 +27,18 @@ React Native (Expo, TS)  ──HTTPS/JSON──►  Goravel API (Go)  ──► 
 └── .env.example        Root env consumed by docker-compose
 ```
 
+## Quick start (one command)
+
+From a fresh clone, this creates env files (with generated secrets), builds and
+starts Docker, then migrates and seeds the database:
+
+```bash
+./scripts/dev-setup.sh
+```
+
+Then open `http://localhost:3000/api/v1/health`. See the manual steps below for
+details, or [CLAUDE.md](CLAUDE.md) for a full project/context overview.
+
 ## Prerequisites
 
 - Docker + Docker Compose (for backend + MySQL)
