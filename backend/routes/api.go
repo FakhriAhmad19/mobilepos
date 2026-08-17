@@ -36,8 +36,9 @@ func Api() {
 	healthController := controllers.NewHealthController()
 	authController := controllers.NewAuthController()
 
-	// Baseline security headers on every response (Phase 8 — security).
-	facades.Route().GlobalMiddleware(middleware.SecureHeaders())
+	// Baseline security headers + CORS for the API on every response
+	// (Phase 8 — security; CORS lets browser clients call the API cross-origin).
+	facades.Route().GlobalMiddleware(middleware.SecureHeaders(), middleware.Cors())
 
 	// Turn any unhandled panic into the PRD error envelope instead of leaking a
 	// stack trace or dropping the connection (Phase 8 — consistent errors).
